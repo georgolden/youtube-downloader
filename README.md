@@ -16,7 +16,7 @@ A FastAPI-based API for downloading YouTube videos and audio. This API allows yo
 
 1. Clone the repository (or download the source code):
 ```bash
-git clone <your-repository-url>
+git clone git@github.com:georgolden/youtube-downloader.git
 cd youtube-downloader
 ```
 
