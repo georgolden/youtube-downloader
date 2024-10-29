@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Downloads folder
+downloads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Environment variables
+.env
+
+# Logs
+*.log
