@@ -7,6 +7,8 @@ from typing import Optional, AsyncGenerator
 from enum import Enum
 import io
 import httpx
+import re
+import unicodedata
 
 app = FastAPI(title="YouTube Downloader API")
 
@@ -30,6 +32,30 @@ class AudioFormat(str, Enum):
     MP3 = "mp3"
     M4A = "m4a"
     WAV = "wav"
+
+def sanitize_filename(title: str) -> str:
+    """
+    Sanitize the filename to handle Unicode characters and remove invalid characters.
+    """
+    # Normalize Unicode characters
+    title = unicodedata.normalize('NFKD', title)
+    
+    # Replace invalid filename characters with underscore
+    title = re.sub(r'[<>:"/\\|?*]', '_', title)
+    
+    # Replace spaces with underscores
+    title = title.replace(' ', '_')
+    
+    # Remove any non-ASCII characters that might cause encoding issues
+    title = ''.join(char for char in title if ord(char) < 128)
+    
+    # Remove multiple consecutive underscores
+    title = re.sub(r'_+', '_', title)
+    
+    # Trim underscores from start and end
+    title = title.strip('_')
+    
+    return title or 'download'  # Fallback if title becomes empty
 
 def my_hook(d):
     if d['status'] == 'downloading':
@@ -68,7 +94,7 @@ async def download_video(
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             video_url = info['url']
-            title = info.get('title', 'video').replace(' ', '_')
+            title = sanitize_filename(info.get('title', 'video'))
 
             headers = {
                 'Content-Disposition': f'attachment; filename="{title}.mp4"',
@@ -92,7 +118,7 @@ async def download_video(
 async def download_audio(
     url: str,
     format: AudioFormat = AudioFormat.MP3,
-    quality: str = "192"
+    quality: str = "128"  # Changed default to 128kbps for better size optimization
 ):
     """Stream YouTube audio."""
     try:
@@ -101,12 +127,22 @@ async def download_audio(
         ydl_opts = {
             'format': 'bestaudio/best',
             'quiet': True,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': format,
+                'preferredquality': quality,
+            }],
+            'postprocessor_args': [
+                '-ar', '44100',
+                '-ac', '2',
+                '-b:a', f'{quality}k',
+            ],
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             audio_url = info['url']
-            title = info.get('title', 'audio').replace(' ', '_')
+            title = sanitize_filename(info.get('title', 'audio'))
 
             headers = {
                 'Content-Disposition': f'attachment; filename="{title}.{format}"',
