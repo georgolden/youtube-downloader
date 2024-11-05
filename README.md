@@ -51,6 +51,11 @@ choco install ffmpeg
 
 ## Running the API
 
+Activate venv if needed:
+```
+source venv/bin/activate
+```
+
 Start the server:
 ```bash
 uvicorn main:app --reload
