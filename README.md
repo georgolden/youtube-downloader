@@ -1,15 +1,10 @@
 # YouTube Downloader API
 
-A FastAPI-based API for downloading YouTube videos and audio. This API allows you to:
-- Download videos in different qualities
-- Extract audio in various formats (MP3, M4A, WAV)
-- Get video information
-- Manage downloads
+A FastAPI-based API for downloading YouTube content as audio in MP4 format. This API provides a simple and efficient way to download YouTube videos as audio files, optimized for transcription purposes.
 
 ## Prerequisites
 
 - Python 3.10 or higher
-- FFmpeg (required for audio processing)
 - Git (optional, for cloning the repository)
 
 ## Installation
@@ -36,19 +31,6 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Install FFmpeg:
-```bash
-# On Ubuntu/Debian
-sudo apt update
-sudo apt install ffmpeg ffmpeg-doc
-
-# On macOS with Homebrew
-brew install ffmpeg
-
-# On Windows with Chocolatey
-choco install ffmpeg
-```
-
 ## Running the API
 
 Activate venv if needed:
@@ -65,34 +47,21 @@ The API will be available at `http://localhost:8000`
 
 ## API Endpoints
 
-### 1. Download Video
-```http
-GET /video/download
-```
-Parameters:
-- `url`: YouTube video URL (required)
-- `quality`: Video quality (optional, default: "best", options: "720p", "1080p", etc.)
-
-Example:
-```bash
-curl "http://localhost:8000/video/download?url=https://www.youtube.com/watch?v=VIDEO_ID&quality=720p"
-```
-
-### 2. Download Audio
+### 1. Download Audio
 ```http
 GET /audio/download
 ```
 Parameters:
 - `url`: YouTube video URL (required)
-- `format`: Audio format (optional, default: "mp3", options: "mp3", "m4a", "wav")
-- `quality`: Audio quality in kbps (optional, default: "192")
 
 Example:
 ```bash
-curl "http://localhost:8000/audio/download?url=https://www.youtube.com/watch?v=VIDEO_ID&format=mp3&quality=320"
+curl "http://localhost:8000/audio/download?url=https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-### 3. Get Video Info
+Downloads the audio in MP4 format using the lowest quality available, optimized for minimal file size while maintaining audio quality suitable for transcription.
+
+### 2. Get Video Info
 ```http
 GET /info
 ```
@@ -104,15 +73,7 @@ Example:
 curl "http://localhost:8000/info?url=https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-### 4. Cleanup Downloads
-```http
-GET /cleanup
-```
-or
-```http
-DELETE /cleanup
-```
-Removes all downloaded files to free up space.
+Returns metadata about the video including title, duration, view count, and available formats.
 
 ## Interactive API Documentation
 
@@ -136,31 +97,24 @@ The main dependencies are defined in `requirements.txt`:
 - FastAPI
 - uvicorn
 - yt-dlp
-- python-multipart
 
 ## Common Issues and Solutions
 
-1. **FFmpeg not found error**
-   ```
-   Error: FFmpeg is not installed. Please install FFmpeg to download audio.
-   ```
-   Solution: Install FFmpeg using your system's package manager.
+1. **Permission denied**
+    ```
+    Error: Permission denied: 'downloads/...'
+    ```
+    Solution: Ensure the `downloads` directory exists and has proper write permissions:
+    ```bash
+    mkdir downloads
+    chmod 755 downloads
+    ```
 
-2. **Permission denied**
-   ```
-   Error: Permission denied: 'downloads/...'
-   ```
-   Solution: Ensure the `downloads` directory exists and has proper write permissions:
-   ```bash
-   mkdir downloads
-   chmod 755 downloads
-   ```
-
-3. **Video not available**
-   ```
-   Error: Video unavailable
-   ```
-   Solution: Verify the video URL is correct and the video is available in your region.
+2. **Video not available**
+    ```
+    Error: Video unavailable
+    ```
+    Solution: Verify the video URL is correct and the video is available in your region.
 
 ## Development
 
@@ -173,10 +127,9 @@ To contribute to the project:
 
 ## License
 
-[Your chosen license]
+MIT
 
 ## Acknowledgments
 
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-- FFmpeg
