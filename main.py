@@ -1,14 +1,15 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
 import logging
-from typing import Optional, AsyncGenerator
+from typing import Optional
 from enum import Enum
-import io
-import httpx
 import re
 import unicodedata
+from pathlib import Path
+import os
+import glob
 
 app = FastAPI(title="YouTube Downloader API")
 
@@ -28,10 +29,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class AudioFormat(str, Enum):
-    MP3 = "mp3"
-    M4A = "m4a"
-    WAV = "wav"
+# Configure download directory
+DOWNLOAD_DIR = Path("downloads")
+DOWNLOAD_DIR.mkdir(exist_ok=True)
+
+class VideoFormat(str, Enum):
+    MP4 = "mp4"
+    WEBM = "webm"
+    MKV = "mkv"
 
 def sanitize_filename(title: str) -> str:
     """
@@ -57,109 +62,88 @@ def sanitize_filename(title: str) -> str:
     
     return title or 'download'  # Fallback if title becomes empty
 
-def my_hook(d):
-    if d['status'] == 'downloading':
-        try:
-            percent = d.get('_percent_str', 'N/A')
-            speed = d.get('_speed_str', 'N/A')
-            logger.info(f"Downloading... {percent} at {speed}")
-        except Exception as e:
-            logger.error(f"Error in progress hook: {str(e)}")
-    elif d['status'] == 'finished':
-        logger.info('Download completed, now converting ...')
+def find_downloaded_file(dir_path: Path, title: str, format: str) -> Optional[Path]:
+    """
+    Find the downloaded file in the directory.
+    """
+    # Try exact match first
+    expected_path = dir_path / f"{title}.{format}"
+    if expected_path.exists():
+        return expected_path
+    
+    # If exact match not found, look for any file with similar name
+    pattern = f"{title}*.{format}"
+    files = list(dir_path.glob(pattern))
+    if files:
+        return files[0]
+    
+    # If still not found, look for any recently added file with the correct extension
+    files = list(dir_path.glob(f"*.{format}"))
+    if files:
+        # Sort by creation time, newest first
+        files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        return files[0]
+    
+    return None
 
-async def stream_media(url: str) -> AsyncGenerator[bytes, None]:
-    """Stream media content directly."""
-    async with httpx.AsyncClient() as client:
-        async with client.stream('GET', url) as response:
-            async for chunk in response.aiter_bytes():
-                yield chunk
+def download_video_file(url: str, format: VideoFormat = VideoFormat.MP4) -> tuple[Path, str]:
+    """
+    Download video from YouTube in lowest quality and return the file path and title.
+    """
+    try:
+        ydl_opts = {
+            'format': 'worstaudio/worst',  # Get worst quality video
+            'outtmpl': str(DOWNLOAD_DIR / '%(title)s.%(ext)s'),
+            'merge_output_format': format,  # Ensure output is in desired format
+            'quiet': True,
+            'no_warnings': True
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extract info and download
+            info = ydl.extract_info(url, download=True)
+            title = sanitize_filename(info['title'])
+            
+            # Find the actual downloaded file
+            file_path = find_downloaded_file(DOWNLOAD_DIR, title, format)
+            if not file_path:
+                raise FileNotFoundError(f"Could not find downloaded file for {title}")
+            
+            logger.info(f"Found downloaded file at: {file_path}")
+            return file_path, title
+            
+    except Exception as e:
+        logger.error(f"Error downloading file: {str(e)}")
+        raise
 
 @app.get("/video/download")
 async def download_video(
     url: str,
-    quality: Optional[str] = "best"
+    format: VideoFormat = VideoFormat.MP4
 ):
-    """Stream YouTube video."""
+    """Download and serve YouTube video."""
     try:
-        logger.info(f"Starting video stream for URL: {url} with quality: {quality}")
-
-        format_str = f'bestvideo[height<={quality[:-1]}]+bestaudio/best' if quality != "best" else 'best'
-
-        ydl_opts = {
-            'format': format_str,
-            'quiet': True,
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            video_url = info['url']
-            title = sanitize_filename(info.get('title', 'video'))
-
-            headers = {
-                'Content-Disposition': f'attachment; filename="{title}.mp4"',
-                'Content-Type': 'video/mp4'
-            }
-
-            return StreamingResponse(
-                stream_media(video_url),
-                headers=headers,
-                media_type='video/mp4'
-            )
-
-    except Exception as e:
-        logger.error(f"Error in video streaming: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Video streaming failed: {str(e)}"
+        logger.info(f"Starting video download for URL: {url} with format: {format}")
+        
+        # Download the file
+        file_path, title = download_video_file(url, format)
+        
+        logger.info(f"Preparing to send file: {file_path}")
+        
+        # Create FileResponse with the file
+        response = FileResponse(
+            path=str(file_path),
+            filename=f"{title}.{format}",
+            media_type=f'video/{format}'
         )
-
-@app.get("/audio/download")
-async def download_audio(
-    url: str,
-    format: AudioFormat = AudioFormat.MP3,
-    quality: str = "128"  # Changed default to 128kbps for better size optimization
-):
-    """Stream YouTube audio."""
-    try:
-        logger.info(f"Starting audio stream for URL: {url} with format: {format}, quality: {quality}")
-
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'quiet': True,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': format,
-                'preferredquality': quality,
-            }],
-            'postprocessor_args': [
-                '-ar', '44100',
-                '-ac', '2',
-                '-b:a', f'{quality}k',
-            ],
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            audio_url = info['url']
-            title = sanitize_filename(info.get('title', 'audio'))
-
-            headers = {
-                'Content-Disposition': f'attachment; filename="{title}.{format}"',
-                'Content-Type': f'audio/{format}'
-            }
-
-            return StreamingResponse(
-                stream_media(audio_url),
-                headers=headers,
-                media_type=f'audio/{format}'
-            )
+        
+        return response
 
     except Exception as e:
-        logger.error(f"Error in audio streaming: {str(e)}")
+        logger.error(f"Error in video download: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Audio streaming failed: {str(e)}"
+            detail=f"Video download failed: {str(e)}"
         )
 
 @app.get("/info")
@@ -180,14 +164,12 @@ async def get_video_info(url: str):
                 "uploader": info.get('uploader'),
                 "formats": [
                     {
-                        "quality": f.get('height', 'audio only'),
+                        "quality": f.get('height', 'N/A'),
                         "ext": f.get('ext'),
                         "filesize": f.get('filesize'),
-                        "acodec": f.get('acodec'),
                         "vcodec": f.get('vcodec')
                     }
                     for f in info.get('formats', [])
-                    if f.get('height') or f.get('acodec') == 'opus'
                 ]
             }
     except Exception as e:
