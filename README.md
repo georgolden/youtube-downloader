@@ -4,12 +4,15 @@ A FastAPI-based API for downloading YouTube content as audio in MP4 format. This
 
 ## Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
+- Docker and Docker Compose (optional)
 - Git (optional, for cloning the repository)
 
-## Installation
+## Installation and Running
 
-1. Clone the repository (or download the source code):
+### Option 1: Local Installation with Virtual Environment
+
+1. Clone the repository:
 ```bash
 git clone git@github.com:georgolden/youtube-downloader.git
 cd youtube-downloader
@@ -17,30 +20,49 @@ cd youtube-downloader
 
 2. Create and activate a virtual environment:
 ```bash
-# On Linux/Mac
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate
 
-# On Windows
-python -m venv venv
+# Activate virtual environment
+# On Windows:
 venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
 ```
 
-3. Install required Python packages:
+3. Install required packages:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Running the API
-
-Activate venv if needed:
-```
-source venv/bin/activate
-```
-
-Start the server:
+4. Start the server:
 ```bash
 uvicorn main:app --reload
+```
+
+### Option 2: Docker Installation
+
+1. Clone the repository:
+```bash
+git clone git@github.com:georgolden/youtube-downloader.git
+cd youtube-downloader
+```
+
+2. Build and run with Docker Compose:
+```bash
+docker-compose up -d
+```
+
+Or using Docker directly:
+```bash
+# Build the image
+docker build -t youtube-downloader .
+
+# Run the container
+docker run -d \
+  -p 8000:8000 \
+  -v "$(pwd)/downloads:/app/downloads" \
+  youtube-downloader
 ```
 
 The API will be available at `http://localhost:8000`
@@ -59,8 +81,6 @@ Example:
 curl "http://localhost:8000/audio/download?url=https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-Downloads the audio in MP4 format using the lowest quality available, optimized for minimal file size while maintaining audio quality suitable for transcription.
-
 ### 2. Get Video Info
 ```http
 GET /info
@@ -73,13 +93,36 @@ Example:
 curl "http://localhost:8000/info?url=https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-Returns metadata about the video including title, duration, view count, and available formats.
+## Development
 
-## Interactive API Documentation
+### Virtual Environment Tips
+- Always activate the virtual environment before working on the project
+- If you install new packages, update requirements.txt:
+```bash
+pip freeze > requirements.txt
+```
+- To deactivate the virtual environment:
+```bash
+deactivate
+```
 
-FastAPI provides automatic interactive API documentation:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+### Docker Development Tips
+- Rebuild the image after making changes:
+```bash
+docker-compose build
+```
+- View logs:
+```bash
+docker-compose logs -f
+```
+- Stop the service:
+```bash
+docker-compose down
+```
+- Access container shell:
+```bash
+docker-compose exec api bash
+```
 
 ## Project Structure
 ```
@@ -87,49 +130,36 @@ youtube-downloader/
 ├── venv/              # Virtual environment (not in git)
 ├── downloads/         # Downloaded files directory
 ├── main.py           # Main API code
-├── requirements.txt   # Python dependencies
-└── README.md         # This file
+├── Dockerfile        # Docker configuration
+├── docker-compose.yml # Docker Compose configuration
+├── requirements.txt  # Python dependencies
+└── README.md         # Documentation
 ```
-
-## Dependencies
-
-The main dependencies are defined in `requirements.txt`:
-- FastAPI
-- uvicorn
-- yt-dlp
 
 ## Common Issues and Solutions
 
-1. **Permission denied**
-    ```
-    Error: Permission denied: 'downloads/...'
-    ```
-    Solution: Ensure the `downloads` directory exists and has proper write permissions:
-    ```bash
-    mkdir downloads
-    chmod 755 downloads
-    ```
+1. **Permission denied in Docker**
+   ```
+   Error: Permission denied: 'downloads/...'
+   ```
+   Solution: Check that the downloads volume is properly mounted:
+   ```bash
+   docker-compose down
+   docker-compose up -d
+   ```
 
-2. **Video not available**
-    ```
-    Error: Video unavailable
-    ```
-    Solution: Verify the video URL is correct and the video is available in your region.
-
-## Development
-
-To contribute to the project:
-
-1. Fork the repository
-2. Create a virtual environment and install dependencies
-3. Make your changes
-4. Submit a pull request
+2. **FFmpeg missing**
+   ```
+   Error: FFmpeg not found
+   ```
+   Solution: FFmpeg is included in the Docker image. For local development, install FFmpeg:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install ffmpeg
+   # macOS
+   brew install ffmpeg
+   ```
 
 ## License
 
 MIT
-
-## Acknowledgments
-
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
