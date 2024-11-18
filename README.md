@@ -1,165 +1,117 @@
-# YouTube Downloader API
+# YouTube Downloader Microservice
 
-A FastAPI-based API for downloading YouTube content as audio in MP4 format. This API provides a simple and efficient way to download YouTube videos as audio files, optimized for transcription purposes.
+A microservice that downloads YouTube content as audio in MP4 format, optimized for transcription purposes. Downloads large files in chunks of 24MB.
 
-## Prerequisites
+## Features
+- Downloads YouTube audio in optimal quality for transcription
+- Splits large files into 24MB chunks automatically
+- Stores files in MinIO
+- Uses Redis event store for processing
+- Handles errors gracefully
 
-- Python 3.11 or higher
-- Docker and Docker Compose (optional)
-- Git (optional, for cloning the repository)
+## Requirements
+- Python >= 3.10
+- Redis
+- MinIO
+- FFmpeg
 
-## Installation and Running
+## Installation
 
-### Option 1: Local Installation with Virtual Environment
-
-1. Clone the repository:
+1. Clone and setup:
 ```bash
 git clone git@github.com:georgolden/youtube-downloader.git
 cd youtube-downloader
-```
-
-2. Create and activate a virtual environment:
-```bash
-# Create virtual environment
 python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e ".[test]"
 ```
 
-3. Install required packages:
+## Configuration
+
+Create `.env`:
+```env
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# MinIO
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET=audio
+MINIO_SECURE=False
+```
+
+## Running Tests
+
 ```bash
-pip install -r requirements.txt
-```
-
-4. Start the server:
-```bash
-uvicorn main:app --reload
-```
-
-### Option 2: Docker Installation
-
-1. Clone the repository:
-```bash
-git clone git@github.com:georgolden/youtube-downloader.git
-cd youtube-downloader
-```
-
-2. Build and run with Docker Compose:
-```bash
-docker-compose up -d
-```
-
-Or using Docker directly:
-```bash
-# Build the image
-docker build -t youtube-downloader .
-
-# Run the container
-docker run -d \
-  -p 8000:8000 \
-  -v "$(pwd)/downloads:/app/downloads" \
-  youtube-downloader
-```
-
-The API will be available at `http://localhost:8000`
-
-## API Endpoints
-
-### 1. Download Audio
-```http
-GET /audio/download
-```
-Parameters:
-- `url`: YouTube video URL (required)
-
-Example:
-```bash
-curl "http://localhost:8000/audio/download?url=https://www.youtube.com/watch?v=VIDEO_ID"
-```
-
-### 2. Get Video Info
-```http
-GET /info
-```
-Parameters:
-- `url`: YouTube video URL (required)
-
-Example:
-```bash
-curl "http://localhost:8000/info?url=https://www.youtube.com/watch?v=VIDEO_ID"
-```
-
-## Development
-
-### Virtual Environment Tips
-- Always activate the virtual environment before working on the project
-- If you install new packages, update requirements.txt:
-```bash
-pip freeze > requirements.txt
-```
-- To deactivate the virtual environment:
-```bash
-deactivate
-```
-
-### Docker Development Tips
-- Rebuild the image after making changes:
-```bash
-docker-compose build
-```
-- View logs:
-```bash
-docker-compose logs -f
-```
-- Stop the service:
-```bash
-docker-compose down
-```
-- Access container shell:
-```bash
-docker-compose exec api bash
+pytest
+pytest -v  # Verbose
+pytest src/tests/domain/test_integration.py  # Specific file
 ```
 
 ## Project Structure
 ```
 youtube-downloader/
-├── venv/              # Virtual environment (not in git)
-├── downloads/         # Downloaded files directory
-├── main.py           # Main API code
-├── Dockerfile        # Docker configuration
-├── docker-compose.yml # Docker Compose configuration
-├── requirements.txt  # Python dependencies
-└── README.md         # Documentation
+├── src/
+│   ├── youtube_downloader.py
+│   ├── domain/
+│   │   ├── handler/
+│   │   │   └── download_audio.py
+│   │   ├── constants.py
+│   │   ├── dependencies.py
+│   │   └── types.py
+│   └── infra/
+│       ├── core_types.py
+│       ├── minio.py
+│       └── redis.py
+├── tests/
+│   └── domain/
+│       └── test_integration.py
+├── .env
+└── pyproject.toml
 ```
 
-## Common Issues and Solutions
+## Event Structure
 
-1. **Permission denied in Docker**
-   ```
-   Error: Permission denied: 'downloads/...'
-   ```
-   Solution: Check that the downloads volume is properly mounted:
-   ```bash
-   docker-compose down
-   docker-compose up -d
-   ```
+### Input Event
+```python
+{
+    "id": "event-id",
+    "name": "youtube_audio_requested",
+    "data": {
+        "id": "request-id",
+        "url": "https://youtube.com/watch?v=..."
+    }
+}
+```
 
-2. **FFmpeg missing**
-   ```
-   Error: FFmpeg not found
-   ```
-   Solution: FFmpeg is included in the Docker image. For local development, install FFmpeg:
-   ```bash
-   # Ubuntu/Debian
-   sudo apt-get install ffmpeg
-   # macOS
-   brew install ffmpeg
-   ```
+### Output Event
+```python
+{
+    "name": "youtube_audio_downloaded",
+    "data": [
+        {
+            "path": "request-id:video-title",
+            "title": "Video Title"
+        },
+        # Additional parts if video was split
+        {
+            "path": "request-id-part2:video-title",
+            "title": "Video Title - Part 2"
+        }
+    ]
+}
+```
 
-## License
+## Running Service
 
-MIT
+```bash
+python src/youtube_downloader.py
+```
+
+## Error Handling
+- Invalid URLs throw ValueError
+- Download failures are propagated
+- File splitting errors throw ValueError
+- Storage errors are propagated
