@@ -1,9 +1,13 @@
+import os
+from dotenv import load_dotenv
 import pytest
+from unittest.mock import patch
 from redis.asyncio import Redis
 from infra.minio import MinioFileStorage
 from infra.redis import RedisEventStore
 from domain.dependencies import Dependencies
 from domain.handler.donwload_audio import download_youtube_audio
+from domain.handler.transcribe_audio import process_youtube_audio, transcribe_audio
 
 # Test configuration
 REDIS_HOST = "0.0.0.0"
@@ -107,3 +111,42 @@ async def test_invalid_url(deps):
     with pytest.raises(ValueError) as exc_info:
         await download_youtube_audio(deps, test_event)
     assert "Download youtube audio failed" in str(exc_info.value)
+
+@pytest.fixture(autouse=True)
+def load_env():
+    load_dotenv()
+    if not os.getenv('OPENAI_API_KEY'):
+        raise ValueError("OPENAI_API_KEY must be set in environment variables")
+
+@pytest.mark.asyncio
+async def test_download_and_transcribe_video(deps):
+    # Create test directory
+    os.makedirs('test_downloads', exist_ok=True)
+
+    test_event = {
+        "id": "test123",
+        "name": "youtube_audio_requested",
+        "data": {
+            "id": "test123",
+            "url": TEST_VIDEO_URL
+        }
+    }
+
+    result = await process_youtube_audio(deps, test_event)
+    assert result["name"] == "transcriptions_created"
+    assert isinstance(result["data"], list)
+    
+    for transcription in result["data"]:
+        assert "path" in transcription
+        assert "title" in transcription
+        assert transcription["path"].startswith("transcription:")
+        
+        # Save to disk for manual verification
+        stored_file = await deps.file_storage.read(transcription["path"])
+        out_path = os.path.join('test_downloads', f'{transcription["title"]}.txt')
+        with open(out_path, 'wb') as f:
+            f.write(stored_file)
+        print(f"Saved transcription to: {out_path}")
+
+        assert len(stored_file) > 0
+        assert isinstance(stored_file.decode(), str)

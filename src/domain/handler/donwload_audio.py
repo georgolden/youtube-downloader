@@ -64,11 +64,8 @@ def sanitize_filename(title: str) -> str:
 
 async def download_youtube_audio(deps: Deps, event: YoutubeAudioRequestedEvent) -> YoutubeAudioDownloadedEvent:
     temp_dir = None
-    temp_file = None
-    split_files = []
     
     try:
-        # Create temporary directory
         temp_dir = mkdtemp()
         temp_file_path = os.path.join(temp_dir, 'audio.mp4')
         
@@ -101,8 +98,8 @@ async def download_youtube_audio(deps: Deps, event: YoutubeAudioRequestedEvent) 
                         continue
                         
                     part_suffix = f"-part{i+1}" if len(split_files) > 1 else ""
-                    title = f"{base_title}{part_suffix}"
-                    path = f"{data['id']}{part_suffix}:{base_title}"
+                    title = f"{base_title}{part_suffix}.mp4"
+                    path = f"{data['id']}{part_suffix}:{base_title}.mp4"
                     await deps.file_storage.write(path, file_content)
                     stored_data.append({
                         'path': path, 

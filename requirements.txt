@@ -4,6 +4,7 @@ redis==5.2.0
 typing-extensions==4.12.2
 minio==7.2.10
 yt-dlp==2024.11.4
+openai==1.54.4
 
 # Test dependencies
 pytest==8.3.3

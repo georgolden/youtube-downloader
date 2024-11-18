@@ -26,3 +26,13 @@ class YoutubeAudioData:
 class YoutubeAudioDownloadedEvent:
     name: str
     data: List[YoutubeAudioData]
+
+@dataclass
+class TranscriptionInfo:
+    title: str
+    path: str
+
+@dataclass
+class TranscriptionCreatedEvent:
+    name: str
+    data: List[TranscriptionInfo]
