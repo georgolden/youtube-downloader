@@ -47,6 +47,7 @@ async def transcribe_audio(deps: Deps, event: YoutubeAudioDownloadedEvent) -> Tr
 
         return {
             'name': 'transcriptions_created',
+            'meta': event['meta'],
             'data': transcriptions
         }
 

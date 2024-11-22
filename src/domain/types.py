@@ -4,7 +4,11 @@ from infra.core_types import EventStore, FileStorage
 
 @dataclass
 class YoutubeAudioRequestData:
-    id: str
+    url: str
+
+@dataclass
+class YoutubeAudioMeta:
+    request_id: str
     url: str
 
 @dataclass
@@ -12,6 +16,7 @@ class YoutubeAudioRequestedEvent:
     id: str
     name: str
     data: YoutubeAudioRequestData
+    meta: YoutubeAudioMeta
 
 class Deps(Protocol):
     file_storage: FileStorage

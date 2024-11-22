@@ -6,7 +6,7 @@ from domain.constants import ServiceConfig
 from infra.core_types import FileStorage
 from infra.minio import MinioFileStorage
 from infra.redis import RedisEventStore
-from domain.handler.donwload_audio import download_youtube_audio
+from domain.handler.transcribe_audio import process_youtube_audio
 from domain.dependencies import Dependencies
 
 class YoutubeDownloaderMicroservice:
@@ -55,7 +55,7 @@ class YoutubeDownloaderMicroservice:
         try:
             print(f"Starting {ServiceConfig.NAME} service...")
             await self.event_store.process_events(
-                lambda event: download_youtube_audio(self.deps, event)
+                lambda event: process_youtube_audio(self.deps, event)
             )
         except Exception as e:
             print(f"Fatal error in {ServiceConfig.NAME} service: {e}")

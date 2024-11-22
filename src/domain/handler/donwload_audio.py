@@ -111,6 +111,7 @@ async def download_youtube_audio(deps: Deps, event: YoutubeAudioRequestedEvent) 
                 
             return {
                 'name': "youtube_audio_downloaded",
+                'meta': event['meta'],
                 'data': stored_data
             }
             
