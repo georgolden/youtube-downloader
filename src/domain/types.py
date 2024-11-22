@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Protocol, List
+from typing import Any, Protocol, List
 from infra.core_types import EventStore, FileStorage
 
 @dataclass
@@ -31,6 +31,7 @@ class YoutubeAudioData:
 class YoutubeAudioDownloadedEvent:
     name: str
     data: List[YoutubeAudioData]
+    meta: Any
 
 @dataclass
 class TranscriptionInfo:
@@ -41,3 +42,4 @@ class TranscriptionInfo:
 class TranscriptionCreatedEvent:
     name: str
     data: List[TranscriptionInfo]
+    meta: Any

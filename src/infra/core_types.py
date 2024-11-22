@@ -7,6 +7,7 @@ class Event:
     id: str
     name: str
     data: Any
+    meta: Any
     timestamp: Optional[str] = None
 
 class FileStorage(Protocol):

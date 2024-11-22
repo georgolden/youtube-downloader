@@ -3,9 +3,13 @@ import yt_dlp
 import re
 import subprocess
 import os
+import logging
 from tempfile import NamedTemporaryFile, mkdtemp
 from typing import List
 from domain.types import Deps, YoutubeAudioRequestedEvent, YoutubeAudioDownloadedEvent
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def get_video_duration(file_path: str) -> int:
     cmd = [
@@ -17,25 +21,25 @@ def get_video_duration(file_path: str) -> int:
     output = subprocess.check_output(cmd).decode().strip()
     return int(float(output))
 
-def split_video(input_path: str, max_size_mb: int = 24) -> List[str]:
-    file_size_mb = os.path.getsize(input_path) / (1024 * 1024)
-    if file_size_mb <= max_size_mb:
-        return [input_path]
-    
+def split_video(input_path: str, max_size_mb: int = 23) -> List[str]:
+    """Split video into chunks of max_size_mb"""
     output_files = []
     temp_dir = os.path.dirname(input_path)
     filename = os.path.splitext(os.path.basename(input_path))[0]
     total_duration = get_video_duration(input_path)
     current_duration = 0
     part = 1
-    
+
     while current_duration < total_duration:
-        output_path = os.path.join(temp_dir, f"{filename}-{part}.mp4")
+        output_path = os.path.join(temp_dir, f"{filename}-part{part}.mp4")
+        duration_per_mb = total_duration / (os.path.getsize(input_path) / (1024 * 1024))
+        segment_duration = int(duration_per_mb * max_size_mb)
+        
         cmd = [
             'ffmpeg', '-i', input_path,
             '-ss', str(current_duration),
+            '-t', str(segment_duration),
             '-c', 'copy',
-            '-fs', f'{max_size_mb * 1024 * 1024}',
             output_path
         ]
         subprocess.run(cmd, check=True, capture_output=True)
@@ -43,13 +47,8 @@ def split_video(input_path: str, max_size_mb: int = 24) -> List[str]:
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
             break
             
-        part_duration = get_video_duration(output_path)
-        if part_duration == 0:
-            os.unlink(output_path)
-            break
-            
         output_files.append(output_path)
-        current_duration += part_duration
+        current_duration += segment_duration
         part += 1
     
     return output_files
@@ -64,7 +63,7 @@ def sanitize_filename(title: str) -> str:
 
 async def download_youtube_audio(deps: Deps, event: YoutubeAudioRequestedEvent) -> YoutubeAudioDownloadedEvent:
     temp_dir = None
-    
+    logger.info(f"Event: {event}")
     try:
         temp_dir = mkdtemp()
         temp_file_path = os.path.join(temp_dir, 'audio.mp4')
@@ -78,8 +77,7 @@ async def download_youtube_audio(deps: Deps, event: YoutubeAudioRequestedEvent) 
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            data = event['data']
-            info = ydl.extract_info(data['url'], download=True)
+            info = ydl.extract_info(event.data['url'], download=True)
             base_title = sanitize_filename(info['title'])
             
             if not os.path.exists(temp_file_path):
@@ -99,25 +97,24 @@ async def download_youtube_audio(deps: Deps, event: YoutubeAudioRequestedEvent) 
                         
                     part_suffix = f"-part{i+1}" if len(split_files) > 1 else ""
                     title = f"{base_title}{part_suffix}.mp4"
-                    path = f"{data['id']}{part_suffix}:{base_title}.mp4"
+                    path = f"{base_title}{part_suffix}"
                     await deps.file_storage.write(path, file_content)
                     stored_data.append({
-                        'path': path, 
+                        'path': path,
                         'title': title
                     })
             
             if not stored_data:
                 raise ValueError("No valid files were produced")
                 
-            return {
-                'name': "youtube_audio_downloaded",
-                'meta': event['meta'],
-                'data': stored_data
-            }
+            return YoutubeAudioDownloadedEvent(
+                name="youtube_audio_downloaded",
+                data=stored_data,
+                meta=event.meta
+            )
             
     except Exception as e:
         raise ValueError(f"Download youtube audio failed: {e}")
-        
     finally:
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
